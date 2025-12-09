@@ -1,0 +1,16 @@
+wandb
+outputs
+.hydra
+__pycache__
+lightning_logs
+data/d*
+data/I*
+data/T*
+data/FI_2010/*.txt
+data/BTC
+env
+preprocessing/digital*
+data/checkpoints/
+.vscode
+eda/*/
+
