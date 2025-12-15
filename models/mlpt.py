@@ -17,7 +17,8 @@ class MLPT(nn.Module):
     def __init__(
         self,
         hidden_dim: int,
-        num_layers: int,
+        num_mlp_layers: int,
+        num_trans_layers: int,
         seq_size: int,
         num_features: int,
         num_heads: int,
@@ -26,7 +27,8 @@ class MLPT(nn.Module):
     ):
         super().__init__()
         self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
+        self.num_mlp_layers = num_mlp_layers
+        self.num_trans_layers = num_trans_layers
         self.seq_size = seq_size
         self.dataset_type = dataset_type
 
@@ -40,7 +42,7 @@ class MLPT(nn.Module):
         # AdaLN MLP blocks (no dimensionality reduction at the tail)
         self.mlp_feature_blocks = nn.ModuleList()
         self.mlp_temporal_blocks = nn.ModuleList()
-        for _ in range(num_layers):
+        for _ in range(num_mlp_layers):
             self.mlp_feature_blocks.append(
                 AdaLNBlock(hidden_dim, hidden_dim * 4, hidden_dim, self.cond_dim)
             )
@@ -58,8 +60,8 @@ class MLPT(nn.Module):
         # Transformer blocks (feature axis then temporal axis), final pair reduces dims
         self.trans_feature_blocks = nn.ModuleList()
         self.trans_temporal_blocks = nn.ModuleList()
-        for i in range(num_layers):
-            if i != num_layers - 1:
+        for i in range(num_trans_layers):
+            if i != num_trans_layers - 1:
                 self.trans_feature_blocks.append(
                     TransformerLayer(hidden_dim, num_heads, hidden_dim)
                 )

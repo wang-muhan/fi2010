@@ -16,6 +16,12 @@ from constants import DatasetType
 
 @hydra.main(config_path="config", config_name="config")
 def hydra_app(config: Config):
+    if hasattr(config.model, "horizon_to_seq_size") and config.model.horizon_to_seq_size is not None:
+        horizon = config.experiment.horizon
+        mapping = config.model.horizon_to_seq_size
+        if horizon in mapping:
+            config.model.hyperparameters_fixed["seq_size"] = mapping[horizon]
+            
     set_reproducibility(config.experiment.seed)
     print("Using device: ", cst.DEVICE)
     if (cst.DEVICE == "cpu"):

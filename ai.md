@@ -134,3 +134,59 @@ Notes
 - Indices only include starts where a full `seq_size` window fits inside a segment, so windows cannot cross segments.
 - If your training_step expects `(x, y)` only, either keep `enforce_segments=False` or ignore the third returned item when using `stock_labels`.
 
+## Muon Optimizer Integration
+
+We have integrated the Muon optimizer (from `torch.optim.Muon`) to improve training efficiency, especially for models with large 2D weight matrices (like Transformers and MLPs).
+
+### Implementation Details
+
+1.  **Wrapper Class (`models/engine.py`)**: Created `MuonAdamW`, a wrapper that combines `torch.optim.Muon` and `torch.optim.AdamW`.
+    *   **Muon Group**: Applied to 2D parameters (weights of Linear layers) in hidden layers.
+    *   **AdamW Group**: Applied to embeddings, output heads, and all 1D parameters (biases, normalization weights).
+2.  **Configuration (`config/config.py`)**: Added Muon-specific hyperparameters to model configs (e.g., `ADALNMLPLOB`).
+    *   `muon_lr`: Learning rate for Muon (typically ~0.02, higher than AdamW).
+    *   `muon_momentum`: Momentum for Muon (default 0.95).
+    *   `muon_weight_decay`: Weight decay for Muon (default 0.01).
+3.  **Engine Logic**: `configure_optimizers` selects `MuonAdamW` if `self.optimizer == "Muon"`.
+
+### How to Use
+
+To use Muon, set the optimizer to "Muon" in your configuration or command line.
+
+**1. Config File (`config/config.py`)**
+
+To enable Muon parameters for a specific model (e.g., `ADALNMLPLOB`), add them to `hyperparameters_fixed`:
+
+```python
+@dataclass
+class ADALNMLPLOB(Model):
+    hyperparameters_fixed: dict = field(default_factory=lambda: {
+        # ... standard params
+        "lr": 0.0005,          # AdamW learning rate (for non-Muon params)
+        "muon_lr": 0.02,       # Muon learning rate (main learning rate)
+        "muon_momentum": 0.95,
+        "muon_weight_decay": 0.01
+    })
+    # ...
+```
+
+**2. Running from Command Line**
+
+You can switch between AdamW and Muon dynamically.
+
+*   **Run with AdamW (Default behavior)**:
+    ```bash
+    python main.py +model=adalnmlplob experiment.optimizer=AdamW
+    ```
+
+*   **Run with Muon**:
+    ```bash
+    python main.py +model=adalnmlplob experiment.optimizer=Muon
+    ```
+
+*   **Run with Muon and Custom Hyperparameters**:
+    ```bash
+    python main.py +model=adalnmlplob experiment.optimizer=Muon \
+        model.hyperparameters_fixed.muon_lr=0.05 \
+        model.hyperparameters_fixed.muon_momentum=0.9
+    ```

@@ -13,4 +13,4 @@ preprocessing/digital*
 data/checkpoints/
 .vscode
 eda/*/
-
+multirun/

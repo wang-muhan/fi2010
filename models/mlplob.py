@@ -16,7 +16,7 @@ class MLPLOB(nn.Module):
         self.num_layers = num_layers
         self.dataset_type = dataset_type
         self.layers = nn.ModuleList()
-        # self.order_type_embedder = nn.Embedding(3, 1) # Removed as part of LOBSTER removal
+        self.order_type_embedder = nn.Embedding(3, 1)
         self.first_layer = nn.Linear(num_features, hidden_dim)
         self.norm_layer = BiN(num_features, seq_size)
         self.layers.append(self.first_layer)
@@ -65,18 +65,19 @@ class MLP(nn.Module):
                  ) -> None:
         super().__init__()
         
-        self.layer_norm = nn.LayerNorm(start_dim)
+        self.layer_norm = nn.LayerNorm(final_dim)
         self.fc = nn.Linear(start_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, final_dim)
         self.gelu = nn.GELU()
         
     def forward(self, x):
         residual = x
-        x = self.layer_norm(x)
         x = self.fc(x)
         x = self.gelu(x)
         x = self.fc2(x)
         if x.shape[2] == residual.shape[2]:
             x = x + residual
+        x = self.layer_norm(x)
+        x = self.gelu(x)
         return x
     

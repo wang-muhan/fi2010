@@ -32,7 +32,7 @@ def run(config: Config, accelerator):
         precision=cst.PRECISION,
         max_epochs=config.experiment.max_epochs,
         callbacks=[
-            EarlyStopping(monitor="val_loss", mode="min", patience=10, verbose=True, min_delta=0.002),
+            EarlyStopping(monitor="val_loss", mode="min", patience=2, verbose=True, min_delta=0.002),
             TQDMProgressBar(refresh_rate=1)
             ],
         num_sanity_val_steps=0,
@@ -54,7 +54,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
     dataset_type = config.dataset.type.value
     if dataset_type == "FI_2010":
         path = cst.DATA_DIR + "/FI_2010"
-        if config.model.type in (cst.ModelType.ADALNMLPLOB, cst.ModelType.MLPT):
+        if config.model.type in (cst.ModelType.ADALNMLPLOB, cst.ModelType.MLPT, cst.ModelType.TIMMLPLOB, cst.ModelType.CONVLOB):
             (
                 train_input,
                 train_labels,
@@ -102,84 +102,6 @@ def train(config: Config, trainer: L.Trainer, run=None):
             num_workers=4,
         )
         test_loaders = [data_module.test_dataloader()]
-    
-    # elif dataset_type == "BTC":
-    #     train_input, train_labels = btc_load(cst.DATA_DIR + "/BTC/train.npy", cst.LEN_SMOOTH, horizon, seq_size)
-    #     val_input, val_labels = btc_load(cst.DATA_DIR + "/BTC/val.npy", cst.LEN_SMOOTH, horizon, seq_size)  
-    #     test_input, test_labels = btc_load(cst.DATA_DIR + "/BTC/test.npy", cst.LEN_SMOOTH, horizon, seq_size)
-    #     train_set = Dataset(train_input, train_labels, seq_size)
-    #     val_set = Dataset(val_input, val_labels, seq_size)
-    #     test_set = Dataset(test_input, test_labels, seq_size)
-    #     if config.experiment.is_debug:
-    #         train_set.length = 1000
-    #         val_set.length = 1000
-    #         test_set.length = 10000
-    #     data_module = DataModule(
-    #         train_set=train_set,
-    #         val_set=val_set,
-    #         test_set=test_set,
-    #         batch_size=config.dataset.batch_size,
-    #         test_batch_size=config.dataset.batch_size*4,
-    #         num_workers=4
-    #     ) 
-
-    #     test_loaders = [data_module.test_dataloader()]
-        
-    # elif dataset_type == "LOBSTER":
-    #     training_stocks = config.dataset.training_stocks
-    #     testing_stocks = config.dataset.testing_stocks
-    #     for i in range(len(training_stocks)):
-    #         if i == 0:
-    #             for j in range(2):
-    #                 if j == 0:
-    #                     path = cst.DATA_DIR + "/" + training_stocks[i] + "/train.npy"
-    #                     train_input, train_labels = lobster_load(path, config.model.hyperparameters_fixed["all_features"], cst.LEN_SMOOTH, horizon, seq_size)
-    #                 if j == 1:
-    #                     path = cst.DATA_DIR + "/" + training_stocks[i] + "/val.npy"
-    #                     val_input, val_labels = lobster_load(path, config.model.hyperparameters_fixed["all_features"], cst.LEN_SMOOTH, horizon, seq_size)
-    #         else:
-    #             for j in range(2):
-    #                 if j == 0:
-    #                     path = cst.DATA_DIR + "/" + training_stocks[i] + "/train.npy"
-    #                     train_labels = torch.cat((train_labels, torch.zeros(seq_size+horizon-1, dtype=torch.long)), 0)
-    #                     train_input_tmp, train_labels_tmp = lobster_load(path, config.model.hyperparameters_fixed["all_features"], cst.LEN_SMOOTH, horizon, seq_size)
-    #                     train_input = torch.cat((train_input, train_input_tmp), 0)
-    #                     train_labels = torch.cat((train_labels, train_labels_tmp), 0)
-    #                 if j == 1:
-    #                     path = cst.DATA_DIR + "/" + training_stocks[i] + "/val.npy"
-    #                     val_labels = torch.cat((val_labels, torch.zeros(seq_size+horizon-1, dtype=torch.long)), 0)
-    #                     val_input_tmp, val_labels_tmp = lobster_load(path, config.model.hyperparameters_fixed["all_features"], cst.LEN_SMOOTH, horizon, seq_size)
-    #                     val_input = torch.cat((val_input, val_input_tmp), 0)
-    #                     val_labels = torch.cat((val_labels, val_labels_tmp), 0)
-    #     test_loaders = []
-    #     for i in range(len(testing_stocks)):
-    #         path = cst.DATA_DIR + "/" + testing_stocks[i] + "/test.npy"
-    #         test_input, test_labels = lobster_load(path, config.model.hyperparameters_fixed["all_features"], cst.LEN_SMOOTH, horizon, seq_size)
-    #         test_set = Dataset(test_input, test_labels, seq_size)
-    #         test_dataloader = DataLoader(
-    #             dataset=test_set,
-    #             batch_size=config.dataset.batch_size*4,
-    #             shuffle=False,
-    #             pin_memory=True,
-    #             drop_last=False,
-    #             num_workers=4,
-    #             persistent_workers=True
-    #         )
-    #         test_loaders.append(test_dataloader)
-        
-    #     train_set = Dataset(train_input, train_labels, seq_size)
-    #     val_set = Dataset(val_input, val_labels, seq_size)
-    #     if config.experiment.is_debug:
-    #         train_set.length = 1000
-    #         val_set.length = 1000
-    #         test_set.length = 10000
-    #     data_module = DataModule(
-    #         train_set=train_set,
-    #         val_set=val_set,
-    #         batch_size=config.dataset.batch_size,
-    #         test_batch_size=config.dataset.batch_size*4,
-    #         num_workers=4
-    #     )
     else:
         raise ValueError(f"Unknown dataset type: {dataset_type}")
     
@@ -232,7 +154,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 num_features=train_input.shape[1],
                 dataset_type=dataset_type,
                 map_location=cst.DEVICE,
-                class_weights=class_weights,
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing,
                 )
         elif model_type == "TLOB" or model_type == "TLOB_CLS":
             model = Engine.load_from_checkpoint(
@@ -254,7 +176,8 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 is_sin_emb=checkpoint["hyper_parameters"]["is_sin_emb"],
                 map_location=cst.DEVICE,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing,
+                use_pos_in_attn=checkpoint["hyper_parameters"].get("use_pos_in_attn", False)
                 )
         elif model_type == "BINCTABL":
             model = Engine.load_from_checkpoint(
@@ -272,7 +195,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 dataset_type=dataset_type,
                 map_location=cst.DEVICE,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
                 )
         elif model_type == "DEEPLOB":
             model = Engine.load_from_checkpoint(
@@ -290,7 +213,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 dataset_type=dataset_type,
                 map_location=cst.DEVICE,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
                 )
         elif model_type == "KANLOB":
             model = Engine.load_from_checkpoint(
@@ -310,7 +233,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 dataset_type=dataset_type,
                 map_location=cst.DEVICE,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
                 )
         elif model_type == "ADALNMLPLOB":
             model = Engine.load_from_checkpoint(
@@ -330,7 +253,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 dataset_type=dataset_type,
                 map_location=cst.DEVICE,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
                 )
         elif model_type == "MLPT":
             model = Engine.load_from_checkpoint(
@@ -352,7 +275,48 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 is_sin_emb=checkpoint["hyper_parameters"]["is_sin_emb"],
                 map_location=cst.DEVICE,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
+                )
+        elif model_type == "TIMMLPLOB":
+            model = Engine.load_from_checkpoint(
+                checkpoint_path, 
+                seq_size=seq_size,
+                horizon=horizon,
+                max_epochs=max_epochs,
+                model_type=model_type,
+                is_wandb=config.experiment.is_wandb,
+                experiment_type=experiment_type,
+                lr=lr,
+                optimizer=optimizer,
+                dir_ckpt=dir_ckpt,
+                hidden_dim=hidden_dim,
+                num_layers=num_layers,
+                num_features=train_input.shape[1],
+                dataset_type=dataset_type,
+                variant=checkpoint["hyper_parameters"]["variant"],
+                map_location=cst.DEVICE,
+                len_test_dataloader=len(test_loaders[0]),
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
+                )
+        elif model_type == "CONVLOB":
+            model = Engine.load_from_checkpoint(
+                checkpoint_path, 
+                seq_size=seq_size,
+                horizon=horizon,
+                max_epochs=max_epochs,
+                model_type=model_type,
+                is_wandb=config.experiment.is_wandb,
+                experiment_type=experiment_type,
+                lr=lr,
+                optimizer=optimizer,
+                dir_ckpt=dir_ckpt,
+                hidden_dim=hidden_dim,
+                num_layers=num_layers,
+                num_features=train_input.shape[1],
+                dataset_type=dataset_type,
+                map_location=cst.DEVICE,
+                len_test_dataloader=len(test_loaders[0]),
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
                 )
               
     else:
@@ -372,7 +336,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 num_features=train_input.shape[1],
                 dataset_type=dataset_type,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
             )
         elif model_type == cst.ModelType.ADALNMLPLOB:
             model = Engine(
@@ -390,9 +354,36 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 num_features=train_input.shape[1],
                 dataset_type=dataset_type,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing,
+                muon_lr=config.model.hyperparameters_fixed.get("muon_lr", 0.02),
+                muon_momentum=config.model.hyperparameters_fixed.get("muon_momentum", 0.95),
+                muon_weight_decay=config.model.hyperparameters_fixed.get("muon_weight_decay", 0.01),
+                use_dyt=config.model.hyperparameters_fixed.get("use_dyt", False)
             )
         elif model_type == cst.ModelType.MLPT:
+            model = Engine(
+                seq_size=seq_size,
+                horizon=horizon,
+                max_epochs=config.experiment.max_epochs,
+                model_type=config.model.type.value,
+                is_wandb=config.experiment.is_wandb,
+                experiment_type=experiment_type,
+                lr=config.model.hyperparameters_fixed["lr"],
+                optimizer=config.experiment.optimizer,
+                dir_ckpt=config.experiment.dir_ckpt,
+                hidden_dim=config.model.hyperparameters_fixed["hidden_dim"],
+                num_layers=config.model.hyperparameters_fixed["num_mlp_layers"],
+                num_mlp_layers=config.model.hyperparameters_fixed["num_mlp_layers"],
+                num_trans_layers=config.model.hyperparameters_fixed["num_trans_layers"],
+                num_features=train_input.shape[1],
+                dataset_type=dataset_type,
+                num_heads=config.model.hyperparameters_fixed["num_heads"],
+                is_sin_emb=config.model.hyperparameters_fixed["is_sin_emb"],
+                len_test_dataloader=len(test_loaders[0]),
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing,
+                save_attn_score=config.experiment.save_attn_score
+            )
+        elif model_type == cst.ModelType.TIMMLPLOB:
             model = Engine(
                 seq_size=seq_size,
                 horizon=horizon,
@@ -407,10 +398,27 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 num_layers=config.model.hyperparameters_fixed["num_layers"],
                 num_features=train_input.shape[1],
                 dataset_type=dataset_type,
-                num_heads=config.model.hyperparameters_fixed["num_heads"],
-                is_sin_emb=config.model.hyperparameters_fixed["is_sin_emb"],
+                variant=config.model.hyperparameters_fixed["variant"],
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
+            )
+        elif model_type == cst.ModelType.CONVLOB:
+            model = Engine(
+                seq_size=seq_size,
+                horizon=horizon,
+                max_epochs=config.experiment.max_epochs,
+                model_type=config.model.type.value,
+                is_wandb=config.experiment.is_wandb,
+                experiment_type=experiment_type,
+                lr=config.model.hyperparameters_fixed["lr"],
+                optimizer=config.experiment.optimizer,
+                dir_ckpt=config.experiment.dir_ckpt,
+                hidden_dim=config.model.hyperparameters_fixed["hidden_dim"],
+                num_layers=config.model.hyperparameters_fixed["num_layers"],
+                num_features=train_input.shape[1],
+                dataset_type=dataset_type,
+                len_test_dataloader=len(test_loaders[0]),
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
             )
         elif model_type == cst.ModelType.KANLOB:
             model = Engine(
@@ -428,7 +436,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 num_features=train_input.shape[1],
                 dataset_type=dataset_type,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
             )
         elif model_type == cst.ModelType.TLOB or model_type == cst.ModelType.TLOB_CLS:
             model = Engine(
@@ -448,7 +456,9 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 num_heads=config.model.hyperparameters_fixed["num_heads"],
                 is_sin_emb=config.model.hyperparameters_fixed["is_sin_emb"],
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing,
+                save_attn_score=config.experiment.save_attn_score,
+                use_pos_in_attn=config.model.hyperparameters_fixed.get("use_pos_in_attn", False)
             )
         elif model_type == cst.ModelType.GLALOB or model_type == cst.ModelType.GLALOB_CLS:
             model = Engine(
@@ -468,7 +478,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 num_heads=config.model.hyperparameters_fixed["num_heads"],
                 is_sin_emb=config.model.hyperparameters_fixed["is_sin_emb"],
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
             )
         elif model_type == cst.ModelType.BINCTABL:
             model = Engine(
@@ -484,7 +494,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 num_features=train_input.shape[1],
                 dataset_type=dataset_type,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
             )
         elif model_type == cst.ModelType.DEEPLOB:
             model = Engine(
@@ -500,7 +510,7 @@ def train(config: Config, trainer: L.Trainer, run=None):
                 num_features=train_input.shape[1],
                 dataset_type=dataset_type,
                 len_test_dataloader=len(test_loaders[0]),
-                class_weights=class_weights
+                class_weights=class_weights, lr_scheduler_type=config.experiment.lr_scheduler_type, warmup_epochs=config.experiment.warmup_epochs, label_smoothing=config.experiment.label_smoothing
             )
     
     print("total number of parameters: ", sum(p.numel() for p in model.parameters()))   

@@ -11,62 +11,65 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-class ComputeQKV(nn.Module):
-    def __init__(self, hidden_dim: int, num_heads: int):
-        super().__init__()
-        self.hidden_dim = hidden_dim
-        self.num_heads = num_heads
-        self.q = nn.Linear(hidden_dim, hidden_dim*num_heads)
-        self.k = nn.Linear(hidden_dim, hidden_dim*num_heads)
-        self.v = nn.Linear(hidden_dim, hidden_dim*num_heads)
-        
-    def forward(self, x):
-        q = self.q(x)
-        k = self.k(x)
-        v = self.v(x)
-        return q, k, v
-
-
 class TransformerLayer(nn.Module):
     def __init__(self, hidden_dim: int, num_heads: int, final_dim: int):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
+        
+        # Norms for Post-Norm architecture
         self.norm = nn.LayerNorm(hidden_dim)
-        self.qkv = ComputeQKV(hidden_dim, num_heads)
-        self.mlp = MLP(hidden_dim, hidden_dim*4, final_dim)
+        
+        # Integrated QKV projections
+        self.q = nn.Linear(hidden_dim, hidden_dim*num_heads)
+        self.k = nn.Linear(hidden_dim, hidden_dim*num_heads)
+        self.v = nn.Linear(hidden_dim, hidden_dim*num_heads)
+        
+        # Standard MLP/FFN block
+        self.mlp = MLP(hidden_dim, hidden_dim * 4, final_dim)
+        
         self.w0 = nn.Linear(hidden_dim*num_heads, hidden_dim)
         
-    def forward(self, x, need_weights: bool = False):
+    def forward(self, x, need_weights: bool = False, pos_emb=None):
         res = x
+        v = self.v(x)
 
-        # Project to queries/keys/values then reshape to (batch, heads, seq, head_dim)
-        q, k, v = self.qkv(x)
-        bsz, seq_len, _ = q.shape
+        # Q and K are computed from pos_emb if available and dimensions match
+        # This creates "static" attention maps based on relative positions for temporal layers
+        if pos_emb is not None and pos_emb.shape[-1] == self.hidden_dim:
+            q = self.q(pos_emb.unsqueeze(0))
+            k = self.k(pos_emb.unsqueeze(0))
+        else:
+            q = self.q(x)
+            k = self.k(x)
+
         head_dim = self.hidden_dim
+        # Rearrange to (b, h, s, d)
+        # Note: if q/k came from pos_emb with batch=1, rearrange works fine 
+        # because we start with 'b' (which is 1)
         q = rearrange(q, "b s (h d) -> b h s d", h=self.num_heads, d=head_dim)
         k = rearrange(k, "b s (h d) -> b h s d", h=self.num_heads, d=head_dim)
         v = rearrange(v, "b s (h d) -> b h s d", h=self.num_heads, d=head_dim)
 
-        # FlashAttention/SDPA path (dispatches to flash when available on device/dtype)
+        # SDPA supports broadcasting if query/key have batch_size=1 and value has batch_size=B
         attn_out = F.scaled_dot_product_attention(
             q, k, v, dropout_p=0.0, is_causal=False
         )
 
         att = None
         if need_weights:
-            # Compute attention weights for inspection (not used in forward pass)
             scale = math.sqrt(head_dim)
             att = torch.softmax(torch.matmul(q, k.transpose(-2, -1)) / scale, dim=-1)
 
-        # Merge heads back and continue through the block
         x = rearrange(attn_out, "b h s d -> b s (h d)")
         x = self.w0(x)
         x = x + res
         x = self.norm(x)
         x = self.mlp(x)
-        if x.shape[-1] == res.shape[-1]:
+        
+        if x.shape == res.shape:
             x = x + res
+            
         return x, att
 
 
@@ -78,7 +81,8 @@ class TLOB(nn.Module):
                  num_features: int,
                  num_heads: int,
                  is_sin_emb: bool,
-                 dataset_type: str
+                 dataset_type: str,
+                 use_pos_in_attn: bool = False
                  ) -> None:
         super().__init__()
         
@@ -88,6 +92,7 @@ class TLOB(nn.Module):
         self.seq_size = seq_size
         self.num_heads = num_heads
         self.dataset_type = dataset_type
+        self.use_pos_in_attn = use_pos_in_attn
         self.layers = nn.ModuleList()
         self.first_branch = nn.ModuleList()
         self.second_branch = nn.ModuleList()
@@ -119,27 +124,28 @@ class TLOB(nn.Module):
         
     
     def forward(self, input, store_att=False):
-        # if self.dataset_type == "LOBSTER":
-        #     continuous_features = torch.cat([input[:, :, :41], input[:, :, 42:]], dim=2)
-        #     order_type = input[:, :, 41].long()
-        #     order_type_emb = self.order_type_embedder(order_type).detach()
-        #     x = torch.cat([continuous_features, order_type_emb], dim=2)
-        # else:
         x = input
         x = rearrange(x, 'b s f -> b f s')
         x = self.norm_layer(x)
         x = rearrange(x, 'b f s -> b s f')
         x = self.emb_layer(x)
         x = x[:] + self.pos_encoder
+        att_list = []
         for i in range(len(self.layers)):
-            x, att = self.layers[i](x, need_weights=store_att)
+            if self.use_pos_in_attn:
+                x, att = self.layers[i](x, need_weights=store_att, pos_emb=self.pos_encoder)
+            else:
+                x, att = self.layers[i](x, need_weights=store_att)
             if store_att and att is not None:
-                att = att.detach()
+                att_list.append(att.detach().cpu())
             x = x.permute(0, 2, 1)
         x = rearrange(x, 'b s f -> b (f s) 1')              
         x = x.reshape(x.shape[0], -1)
         for layer in self.final_layers:
             x = layer(x)
+            
+        if store_att:
+            return x, att_list
         return x
     
     
@@ -229,7 +235,8 @@ class TLOBClsToken(nn.Module):
                  is_sin_emb: bool,
                  dataset_type: str,
                  dropout: float = 0.1,
-                 mlp_ratio: float = 4.0
+                 mlp_ratio: float = 4.0,
+                 use_pos_in_attn: bool = False
                  ) -> None:
         super().__init__()
 
@@ -240,6 +247,7 @@ class TLOBClsToken(nn.Module):
         self.num_heads = num_heads
         self.is_sin_emb = is_sin_emb
         self.dataset_type = dataset_type
+        self.use_pos_in_attn = use_pos_in_attn
 
         # self.order_type_embedder = nn.Embedding(3, 1) # Removed as part of LOBSTER removal
         self.norm_layer = BiN(num_features, seq_size)
@@ -261,12 +269,6 @@ class TLOBClsToken(nn.Module):
         self.head = nn.Linear(hidden_dim, 3)
 
     def forward(self, input, store_att: bool = False):
-        # if self.dataset_type == "LOBSTER":
-        #     continuous_features = torch.cat([input[:, :, :41], input[:, :, 42:]], dim=2)
-        #     order_type = input[:, :, 41].long()
-        #     order_type_emb = self.order_type_embedder(order_type).detach()
-        #     x = torch.cat([continuous_features, order_type_emb], dim=2)
-        # else:
         x = input
 
         x = rearrange(x, 'b s f -> b f s')

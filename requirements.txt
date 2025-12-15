@@ -16,3 +16,4 @@ torch_ema
 transformers
 wandb
 pykan
+flash-linear-attention

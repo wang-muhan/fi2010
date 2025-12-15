@@ -13,8 +13,14 @@ class Model:
     
 @dataclass
 class MLPLOB(Model):
-    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 3, "hidden_dim": 40, "lr": 0.001, "seq_size": 64, "all_features": True})
+    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 3, "hidden_dim": 64, "lr": 0.0005, "seq_size": 64, "all_features": True})
     hyperparameters_sweep: dict = field(default_factory=lambda: {"num_layers": [3, 6], "hidden_dim": [128], "lr": [0.0003], "seq_size": [384]})
+    horizon_to_seq_size: dict = field(default_factory=lambda: {
+        10: 16,
+        20: 16,
+        50: 16,
+        100: 16
+    })
     type: ModelType = ModelType.MLPLOB
 
 @dataclass
@@ -25,19 +31,19 @@ class KANLOB(Model):
     
 @dataclass
 class TLOB(Model):
-    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 4, "hidden_dim": 40, "num_heads": 1, "is_sin_emb": True, "lr": 0.0001, "seq_size": 64, "all_features": True})
-    hyperparameters_sweep: dict = field(default_factory=lambda: {"num_layers": [4, 6], "hidden_dim": [128, 256], "num_heads": [1], "is_sin_emb": [True], "lr": [0.0001], "seq_size": [128]})
+    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 4, "hidden_dim": 40, "num_heads": 1, "is_sin_emb": True, "lr": 0.0001, "seq_size": 32, "all_features": True, "use_pos_in_attn": False})
+    hyperparameters_sweep: dict = field(default_factory=lambda: {"num_layers": [4, 6], "hidden_dim": [128, 256], "num_heads": [1], "is_sin_emb": [True], "lr": [0.0001], "seq_size": [128], "use_pos_in_attn": [False]})
     type: ModelType = ModelType.TLOB
 
 @dataclass
 class TLOBClsToken(Model):
-    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 4, "hidden_dim": 40, "num_heads": 1, "is_sin_emb": True, "lr": 0.0001, "seq_size": 128, "all_features": True, "dropout": 0.1, "mlp_ratio": 4.0})
-    hyperparameters_sweep: dict = field(default_factory=lambda: {"num_layers": [4, 6], "hidden_dim": [128, 256], "num_heads": [1], "is_sin_emb": [True], "lr": [0.0001], "seq_size": [128]})
+    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 4, "hidden_dim": 40, "num_heads": 1, "is_sin_emb": True, "lr": 0.0001, "seq_size": 128, "all_features": True, "dropout": 0.1, "mlp_ratio": 4.0, "use_pos_in_attn": False})
+    hyperparameters_sweep: dict = field(default_factory=lambda: {"num_layers": [4, 6], "hidden_dim": [128, 256], "num_heads": [1], "is_sin_emb": [True], "lr": [0.0001], "seq_size": [128], "use_pos_in_attn": [False]})
     type: ModelType = ModelType.TLOB_CLS
     
 @dataclass
 class GLALOB(Model):
-    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 4, "hidden_dim": 40, "num_heads": 1, "is_sin_emb": True, "lr": 0.0001, "seq_size": 128, "all_features": True})
+    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 4, "hidden_dim": 40, "num_heads": 1, "is_sin_emb": True, "lr": 0.0001, "seq_size": 16, "all_features": True})
     hyperparameters_sweep: dict = field(default_factory=lambda: {"num_layers": [4, 6], "hidden_dim": [128, 256], "num_heads": [1], "is_sin_emb": [True], "lr": [0.0001], "seq_size": [128]})
     type: ModelType = ModelType.GLALOB
 
@@ -63,18 +69,67 @@ class DeepLOB(Model):
 
 @dataclass
 class ADALNMLPLOB(Model):
-    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 3, "hidden_dim": 256, "lr": 0.001, "seq_size": 64, "all_features": True})
-    hyperparameters_sweep: dict = field(default_factory=lambda: {"num_layers": [4, 6], "hidden_dim": [128, 256], "lr": [0.0005, 0.001], "seq_size": [64, 128]})
+    hyperparameters_fixed: dict = field(default_factory=lambda: {
+        "num_layers": 3, 
+        "hidden_dim": 64, 
+        "lr": 0.0005, 
+        "seq_size": 64, 
+        "all_features": True, 
+        "dropout": 0.0,
+        "use_dyt": False,
+        # "muon_lr": 0.02,
+        # "muon_momentum": 0.95,
+        # "muon_weight_decay": 0.01
+    })
+    hyperparameters_sweep: dict = field(default_factory=lambda: {
+        "num_layers": [4, 6], 
+        "hidden_dim": [128, 256], 
+        "lr": [0.0005, 0.001], 
+        "seq_size": [64, 128],
+        "use_dyt": [True, False]
+    })
+    horizon_to_seq_size: dict = field(default_factory=lambda: {
+        10: 4,
+        20: 16,
+        50: 16,
+        100: 16
+    })
     type: ModelType = ModelType.ADALNMLPLOB
 
 @dataclass
 class MLPT(Model):
-    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 3, "hidden_dim": 256, "num_heads": 1, "is_sin_emb": True, "lr": 0.001, "seq_size": 64, "all_features": True})
-    hyperparameters_sweep: dict = field(default_factory=lambda: {"num_layers": [4, 6], "hidden_dim": [128, 256], "num_heads": [1], "is_sin_emb": [True], "lr": [0.0005, 0.001], "seq_size": [64, 128]})
+    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_mlp_layers": 3, "num_trans_layers": 1, "hidden_dim": 64, "num_heads": 1, "is_sin_emb": True, "lr": 0.0005, "seq_size": 16, "all_features": True})
+    hyperparameters_sweep: dict = field(default_factory=lambda: {"num_mlp_layers": [4, 6], "num_trans_layers": [4, 6], "hidden_dim": [128, 256], "num_heads": [1], "is_sin_emb": [True], "lr": [0.0005, 0.001], "seq_size": [64, 128]})
     type: ModelType = ModelType.MLPT
 
 @dataclass
-class Dataset:  
+class TIMMLPLOB(Model):
+    hyperparameters_fixed: dict = field(default_factory=lambda: {"num_layers": 3, "hidden_dim": 64, "lr": 0.0005, "seq_size": 64, "all_features": True, "variant": "Mlp"})
+    hyperparameters_sweep: dict = field(default_factory=lambda: {"num_layers": [3, 6], "hidden_dim": [128], "lr": [0.0003], "seq_size": [384], "variant": ["Mlp", "GluMlp", "SwiGLU", "GatedMlp", "ConvMlp", "GlobalResponseNormMlp"]})
+    type: ModelType = ModelType.TIMMLPLOB
+
+@dataclass
+class ConvLOB(Model):
+    hyperparameters_fixed: dict = field(default_factory=lambda: {
+        "num_layers": 3, 
+        "hidden_dim": 64, 
+        "lr": 0.0005, 
+        "seq_size": 64, 
+        "all_features": True,
+        "kernel_size": 32,
+        "dropout": 0.0
+    })
+    hyperparameters_sweep: dict = field(default_factory=lambda: {
+        "num_layers": [3, 6], 
+        "hidden_dim": [64, 128], 
+        "lr": [0.0005, 0.001], 
+        "seq_size": [64, 128],
+        "kernel_size": [16, 32]
+    })
+    type: ModelType = ModelType.CONVLOB
+        
+@dataclass
+class Dataset:
     type: DatasetType = MISSING
     dates: list = MISSING
     batch_size: int = MISSING
@@ -83,7 +138,7 @@ class Dataset:
 class FI_2010(Dataset):
     type: DatasetType = DatasetType.FI_2010
     dates: list = field(default_factory=lambda: ["2010-01-01", "2010-12-31"])
-    batch_size: int = 32
+    batch_size: int = 256
 
 @dataclass
 class Experiment:
@@ -94,11 +149,16 @@ class Experiment:
     is_debug: bool = False
     checkpoint_reference: str = ""
     seed: int = 1
-    horizon: int = 10
+    horizon: int = 100
     max_epochs: int = 20
     dir_ckpt: str = "model.ckpt"
-    optimizer: str = "Adam"
+    optimizer: str = "AdamW"
     use_class_weight: bool = False
+    lr_scheduler_type: str = "plateau" # "plateau" or "cosine_warmup"
+    warmup_epochs: int = 1
+    label_smoothing: float = 0.7
+    save_attn_score: bool = True
+
     
 defaults = [Model, Experiment, Dataset]
 
@@ -125,4 +185,6 @@ cs.store(group="model", name="deeplob", node=DeepLOB)
 cs.store(group="model", name="kanlob", node=KANLOB)
 cs.store(group="model", name="adalnmlplob", node=ADALNMLPLOB)
 cs.store(group="model", name="mlpt", node=MLPT)
+cs.store(group="model", name="timmlplob", node=TIMMLPLOB)
+cs.store(group="model", name="convlob", node=ConvLOB)
 cs.store(group="dataset", name="fi_2010", node=FI_2010)

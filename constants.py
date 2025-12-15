@@ -17,6 +17,8 @@ class ModelType(Enum):
     KANLOB = "KANLOB"
     ADALNMLPLOB = "ADALNMLPLOB"
     MLPT = "MLPT"
+    TIMMLPLOB = "TIMMLPLOB"
+    CONVLOB = "CONVLOB"
     
 class SamplingType(Enum):
     TIME = "time"

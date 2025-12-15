@@ -40,12 +40,33 @@ def _build_segment_indices(segments, seq_size, slice_start, slice_len, return_re
   
 def fi_2010_load(path, seq_size, horizon, all_features, enforce_segments=False):
     dec_data = np.loadtxt(path + "/Train_Dst_NoAuction_ZScore_CF_7.txt")
-    full_train = dec_data
-    full_val = np.loadtxt(path + '/Test_Dst_NoAuction_ZScore_CF_7.txt')
+    
+    train_segments_list = []
+    val_segments_list = []
+    
+    train_meta = cst.FI2010_TRAIN["Train_Dst_NoAuction_ZScore_CF_7.txt"]
+    segments = train_meta["segments"]
+    split_rate = cst.SPLIT_RATES[0]
+    
+    for seg in segments:
+        start = int(seg["start"])
+        end = int(seg["end"]) + 1 
+        seg_data = dec_data[:, start:end]
+        seg_len = seg_data.shape[1]
+        
+        split_idx = int(seg_len * split_rate)
+        
+        train_segments_list.append(seg_data[:, :split_idx])
+        val_segments_list.append(seg_data[:, split_idx:])
+        
+    full_train = np.hstack(train_segments_list)
+    full_val = np.hstack(val_segments_list)
+
+    dec_test1 = np.loadtxt(path + '/Test_Dst_NoAuction_ZScore_CF_7.txt')
     dec_test2 = np.loadtxt(path + '/Test_Dst_NoAuction_ZScore_CF_8.txt')
     dec_test3 = np.loadtxt(path + '/Test_Dst_NoAuction_ZScore_CF_9.txt')
-    full_test = np.hstack((dec_test2, dec_test3))
-    
+    full_test = np.hstack((dec_test1, dec_test2, dec_test3))
+
     if horizon == 10:
         tmp = 5
     elif horizon == 20:
@@ -79,35 +100,95 @@ def fi_2010_load(path, seq_size, horizon, all_features, enforce_segments=False):
     train_indices = val_indices = test_indices = None
     train_stock_ids = val_stock_ids = test_stock_ids = None
     if enforce_segments:
-        train_len = train_input.shape[0]
-        val_len = val_input.shape[0]
-        test2_len = dec_test2.shape[1]
-        test3_len = dec_test3.shape[1]
-
-        # Train spans come from the train file metadata
         train_meta = cst.FI2010_TRAIN["Train_Dst_NoAuction_ZScore_CF_7.txt"]
-        train_segments = train_meta["segments"]
-        train_indices, train_stock_ids = _build_segment_indices(
-            train_segments, seq_size, slice_start=0, slice_len=train_len, return_relative=True, stock_offset=0
-        )
+        raw_segments = train_meta["segments"]
+        split_rate = cst.SPLIT_RATES[0]
+        
+        train_idx_list = []
+        train_stock_list = []
+        current_offset = 0
+        
+        for i, seg in enumerate(raw_segments):
+            seg_start = int(seg["start"])
+            seg_end = int(seg["end"]) + 1
+            full_seg_len = seg_end - seg_start
+            
+            seg_train_len = int(full_seg_len * split_rate)
+            
+            block_idx, block_stock = _build_segment_indices(
+                [{"start": 0, "end": seg_train_len - 1}], 
+                seq_size, 
+                slice_start=0, 
+                slice_len=seg_train_len, 
+                return_relative=True, 
+                stock_offset=i 
+            )
+            
+            block_idx += current_offset
+            
+            train_idx_list.append(block_idx)
+            train_stock_list.append(block_stock)
+            
+            current_offset += seg_train_len
 
-        # Val uses the CF_7 test file (keep same stock ids ordering)
-        val_meta = cst.FI2010_TEST["Test_Dst_NoAuction_ZScore_CF_7.txt"]
-        val_indices, val_stock_ids = _build_segment_indices(
-            val_meta["segments"], seq_size, slice_start=0, slice_len=val_len, return_relative=True, stock_offset=0
-        )
+        train_indices = np.concatenate(train_idx_list)
+        train_stock_ids = np.concatenate(train_stock_list)
 
-        # Test concatenates CF_8 then CF_9; keep ids contiguous (5 per file)
+        val_idx_list = []
+        val_stock_list = []
+        current_offset = 0
+        
+        for i, seg in enumerate(raw_segments):
+            seg_start = int(seg["start"])
+            seg_end = int(seg["end"]) + 1
+            full_seg_len = seg_end - seg_start
+            
+            seg_train_len = int(full_seg_len * split_rate)
+            seg_val_len = full_seg_len - seg_train_len
+            
+            block_idx, block_stock = _build_segment_indices(
+                [{"start": 0, "end": seg_val_len - 1}], 
+                seq_size, 
+                slice_start=0, 
+                slice_len=seg_val_len, 
+                return_relative=True, 
+                stock_offset=i
+            )
+            
+            block_idx += current_offset
+            
+            val_idx_list.append(block_idx)
+            val_stock_list.append(block_stock)
+            
+            current_offset += seg_val_len
+
+        val_indices = np.concatenate(val_idx_list)
+        val_stock_ids = np.concatenate(val_stock_list)
+
+        test_meta1 = cst.FI2010_TEST["Test_Dst_NoAuction_ZScore_CF_7.txt"]
         test_meta2 = cst.FI2010_TEST["Test_Dst_NoAuction_ZScore_CF_8.txt"]
         test_meta3 = cst.FI2010_TEST["Test_Dst_NoAuction_ZScore_CF_9.txt"]
+        
+        test1_len = dec_test1.shape[1]
+        test2_len = dec_test2.shape[1]
+        test3_len = dec_test3.shape[1]
+        
+        test_idx1, stock1 = _build_segment_indices(
+            test_meta1["segments"], seq_size, slice_start=0, slice_len=test1_len, return_relative=True, stock_offset=0
+        )
+        
         test_idx2, stock2 = _build_segment_indices(
-            test_meta2["segments"], seq_size, slice_start=0, slice_len=test2_len, return_relative=False, stock_offset=0
+            test_meta2["segments"], seq_size, slice_start=0, slice_len=test2_len, return_relative=True, stock_offset=0
         )
+        test_idx2 += test1_len
+        
         test_idx3, stock3 = _build_segment_indices(
-            test_meta3["segments"], seq_size, slice_start=test2_len, slice_len=test3_len, return_relative=False, stock_offset=0
+            test_meta3["segments"], seq_size, slice_start=0, slice_len=test3_len, return_relative=True, stock_offset=0
         )
-        test_indices = np.concatenate((test_idx2, test_idx3))
-        test_stock_ids = np.concatenate((stock2, stock3))
+        test_idx3 += (test1_len + test2_len)
+
+        test_indices = np.concatenate((test_idx1, test_idx2, test_idx3))
+        test_stock_ids = np.concatenate((stock1, stock2, stock3))
 
     train_input = torch.from_numpy(train_input).float()
     train_labels = torch.from_numpy(train_labels).long()
